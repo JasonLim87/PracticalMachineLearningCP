@@ -1,0 +1,115 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "Jason Lim"
+date: "Saturday, June 13, 2015"
+output: html_document
+---
+
+#Introduction
+This is the write up for the process that was done to complete the assigned Course Project. The goal of this course project is to utilize the given data and to predict the manner which the exercise is done using techniques learned during the Practical Machine Learning Course.
+
+The training and test data can be obtained as below:
+
+Training :
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+Test :
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+#Data Processing
+All the required libraries are loaded 1st :
+```{r}
+library(caret)
+library(rattle)
+library(rpart.plot)
+library(randomForest)
+```
+
+The dataset is then loaded into R Studio, the data **#DIV/0!** from the files are assigned NA status as well.
+```{r}
+train <- read.csv("pml-training.csv", na.strings=c("NA","#DIV/0!", ""))
+test <- read.csv("pml-testing.csv", na.strings=c("NA","#DIV/0!", ""))
+```
+
+There are multiple columns that have insufficient data, thus it is recommended that these variables are excluded during the prediction. The condition that is set that any columns that has more than 20% NA values are excluded:
+
+```{r}
+train<-train[,!((colSums(is.na(train))/nrow(train)) > 0.8)]
+test<-test[,!((colSums(is.na(test))/nrow(test)) > 0.8)]
+```
+
+Lastly, as the first 7 columns consists of irrelevant information (Time of exercise, participating Personnel etc), they are excluded as well.
+
+```{r}
+train   <-train[,-c(1:7)]
+test <-test[,-c(1:7)]
+```
+
+the **nearZeroVar** function is performed to ensure that there's no variables that have Near Zero Variance, as these will have minimal impact on the prediction and should be removed if exist.
+
+```{r}
+nearZeroVar(train,saveMetrics=TRUE)
+nearZeroVar(test,saveMetrics=TRUE)
+```
+
+The tests indicate that there are no Near Zero Variance variables for both of the datasets, thus the model building phase can commence.
+
+#Building the Machine Learning Algorithm
+The **Training Set** is partitioned into two parts, 60% for **inTraining** and 40% for **inTesting**.
+
+```{r}
+set.seed(2525)
+inTrain <- createDataPartition(y=train$classe, p=0.6, list=FALSE)
+inTraining <- train[inTrain, ]; inTesting <- train[-inTrain, ]
+```
+
+Two different methods will be created and be compared to find out which method will be more suitable to be used for the actual prediction test. The two methods are **Decision Tree** and **Random Forest**.
+
+##Decision Tree
+The Decision Tree model is built and displayed:
+```{r}
+modFitDT <- rpart(classe ~ ., data=inTraining, method="class")
+fancyRpartPlot(modFitDT)
+```
+
+This model is then used to predict the 40% **inTesting** set and its results are displayed:
+
+```{r}
+predictionsDT <- predict(modFitDT, inTesting, type = "class")
+confusionMatrix(predictionsDT, inTesting$classe)
+```
+
+As can be seen, the Accuracy is approximately **72%**. The Random Forest method will now be created and its accuracy be compared with Decision Tree.
+
+##Random Forest
+The Random Forest model is built.The model is used to predict the 40% **inTesting** set and its results are displayed:
+```{r}
+modFitRF <- randomForest(classe ~ ., data=inTraining)
+predictionsRF <- predict(modFitRF, inTesting, type = "class")
+confusionMatrix(predictionsRF, inTesting$classe)
+```
+
+The accuracy of Random Forest model comes at an impressive **99.4%**, a 17% increase from Decision Tree Model.
+
+Due to its high accuracy, the **Random Forest Model** is chosen to be used for predicting the Test Dataset.
+
+#Result Generation
+The **Random Tree Model** that was selected is used to predict the **test** set.
+```{r}
+submitPredict <- predict(modFitRF, test, type="class")
+```
+
+The txt files that were to be submitted to Coursera is generated using the below function :
+```{r}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+```
+
+The function is called using **pml_write_files(submitPredict)**, 20 result txt files will be generated to the working directory and be used to submit to Coursera.
+
+
